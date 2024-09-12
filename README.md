@@ -102,6 +102,7 @@ metadata:
   name: replikator
 spec:
   replicas: 1
+  serviceName: replikator
   selector:
     matchLabels:
       app: replikator
