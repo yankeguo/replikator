@@ -1,18 +1,18 @@
 interval: "2m"
-from:
-  apiVersion: v1
-  kind: Secret
+resource_version: v1
+resource: secrets
+source:
   namespace: default
   name: mysecret1
-to:
+target:
   namespace: ".+"
   name: newsecret1
 ---
-from:
-  apiVersion: v1
-  kind: Secret
+resource_version: v1
+resource: secrets
+source:
   namespace: default
   name: mysecret2
-to:
+target:
   namespace: ".+"
   name: newsecret2

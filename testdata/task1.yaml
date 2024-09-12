@@ -1,8 +1,8 @@
 interval: "2m"
-from:
-  kind: Secret
+resource: secrets
+source:
   namespace: default
   name: mysecret11
-to:
+target:
   namespace: ".+"
   name: newsecret11

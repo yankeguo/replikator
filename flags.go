@@ -25,7 +25,7 @@ func ParseFlags() (flags Flags) {
 	} else {
 		flag.StringVar(&flags.Kubeconfig, "kubeconfig", envKubeconfig, "(optional) absolute path to the kubeconfig file")
 	}
-	flag.StringVar(&flags.Conf, "conf", "", "absolute path to the configuration directory")
+	flag.StringVar(&flags.Conf, "conf", ".", "absolute path to the configuration directory")
 	flag.Parse()
 
 	flags.Conf = os.ExpandEnv(flags.Conf)

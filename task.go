@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,52 +16,68 @@ import (
 )
 
 type Task struct {
-	Interval string `yaml:"interval"`
-	From     struct {
-		APIVersion string `yaml:"apiVersion"`
-		Kind       string `yaml:"kind"`
-		Name       string `yaml:"name"`
-		Namespace  string `yaml:"namespace"`
-	} `yaml:"from"`
-	To struct {
+	Interval    time.Duration `yaml:"-"`
+	RawInterval string        `yaml:"interval"`
+
+	ResourceVersion string `yaml:"resource_version"`
+	Resource        string `yaml:"resource"`
+
+	Source struct {
 		Namespace string `yaml:"namespace"`
 		Name      string `yaml:"name"`
-	} `yaml:"to"`
+	} `yaml:"source"`
+
+	Target struct {
+		Namespace    *regexp.Regexp `yaml:"-"`
+		RawNamespace string         `yaml:"namespace"`
+		Name         string         `yaml:"name"`
+	} `yaml:"target"`
 }
 
 func sanitizeTask(task *Task) (err error) {
-	if task.Interval == "" {
-		task.Interval = "1m"
+	if task.RawInterval == "" {
+		task.RawInterval = "1m"
 	}
-	if _, err = time.ParseDuration(task.Interval); err != nil {
+
+	if task.Interval, err = time.ParseDuration(task.RawInterval); err != nil {
 		return
 	}
-	if task.From.APIVersion == "" {
-		task.From.APIVersion = "v1"
+
+	if task.ResourceVersion == "" {
+		task.ResourceVersion = "v1"
 	}
-	if task.From.Kind == "" {
-		err = errors.New("from.kind is required")
+
+	if task.Resource == "" {
+		err = errors.New("resource is required")
 		return
 	}
-	if task.From.Namespace == "" {
+
+	if task.Source.Namespace == "" {
 		buf, _ := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if len(buf) > 0 {
-			task.From.Namespace = string(buf)
+			task.Source.Namespace = string(buf)
 		} else {
-			err = errors.New("from.namespace is required")
+			err = errors.New("source.namespace is required")
 			return
 		}
 	}
-	if task.From.Name == "" {
-		err = errors.New("from.name is required")
+
+	if task.Source.Name == "" {
+		err = errors.New("source.name is required")
 		return
 	}
-	if task.To.Namespace == "" {
-		err = errors.New("to.namespace is required")
+
+	if task.Target.RawNamespace == "" {
+		err = errors.New("target.namespace is required")
 		return
 	}
-	if task.To.Name == "" {
-		task.To.Name = task.From.Name
+
+	if task.Target.Namespace, err = regexp.Compile(task.Target.RawNamespace); err != nil {
+		return
+	}
+
+	if task.Target.Name == "" {
+		task.Target.Name = task.Source.Name
 	}
 	return
 }
@@ -76,7 +93,7 @@ func LoadTasks(dir string) (tasks []Task, err error) {
 			continue
 		}
 
-		log.Println("loading task from", entry.Name())
+		log.Println("loading tasks from:", entry.Name())
 
 		buf := rg.Must(os.ReadFile(filepath.Join(dir, entry.Name())))
 

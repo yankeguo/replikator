@@ -5,13 +5,14 @@ import (
 	"os"
 
 	"github.com/yankeguo/rg"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 // CreateClient creates a kubernetes client with both in-cluster and out-of-cluster support
-func CreateClient(kubeconfig string) (client *kubernetes.Clientset, err error) {
+func CreateClient(kubeconfig string) (client *kubernetes.Clientset, dynClient *dynamic.DynamicClient, err error) {
 	defer rg.Guard(&err)
 
 	var config *rest.Config
@@ -28,5 +29,6 @@ func CreateClient(kubeconfig string) (client *kubernetes.Clientset, err error) {
 	}
 
 	client = rg.Must(kubernetes.NewForConfig(config))
+	dynClient = rg.Must(dynamic.NewForConfig(config))
 	return
 }

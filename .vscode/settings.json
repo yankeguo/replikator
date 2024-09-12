@@ -1,7 +1,9 @@
 {
     "cSpell.words": [
+        "apimachinery",
         "clientcmd",
         "Clientset",
+        "evanphx",
         "Kubeconfig",
         "replikator"
     ]
