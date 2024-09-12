@@ -10,6 +10,10 @@ import (
 
 	"github.com/yankeguo/replikator"
 	"github.com/yankeguo/rg"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
@@ -28,11 +32,20 @@ func main() {
 
 	log.Println("replikator", AppVersion)
 
-	flags := replikator.ParseFlags()
+	flags := rg.Must(replikator.ParseFlags())
 
 	tasks := rg.Must(replikator.LoadTasks(flags.Conf))
 
-	client, dynClient := rg.Must2(replikator.CreateClient(flags.Kubeconfig))
+	var conf *rest.Config
+
+	if flags.Kubeconfig.InCluster {
+		conf = rg.Must(rest.InClusterConfig())
+	} else {
+		conf = rg.Must(clientcmd.BuildConfigFromFlags("", flags.Kubeconfig.Path))
+	}
+
+	client := rg.Must(kubernetes.NewForConfig(conf))
+	dynClient := rg.Must(dynamic.NewForConfig(conf))
 
 	wg := &sync.WaitGroup{}
 
