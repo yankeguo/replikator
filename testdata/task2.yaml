@@ -1,0 +1,18 @@
+interval: "2m"
+from:
+  apiVersion: v1
+  kind: Secret
+  namespace: default
+  name: mysecret1
+to:
+  namespace: ".+"
+  name: newsecret1
+---
+from:
+  apiVersion: v1
+  kind: Secret
+  namespace: default
+  name: mysecret2
+to:
+  namespace: ".+"
+  name: newsecret2

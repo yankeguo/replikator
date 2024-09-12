@@ -1,0 +1,8 @@
+interval: "2m"
+from:
+  kind: Secret
+  namespace: default
+  name: mysecret11
+to:
+  namespace: ".+"
+  name: newsecret11
