@@ -12,6 +12,10 @@ import (
 	"github.com/yankeguo/rg"
 )
 
+var (
+	AppVersion = "dev"
+)
+
 func main() {
 	var err error
 	defer func() {
@@ -21,6 +25,8 @@ func main() {
 		log.Fatalln("exited with error:", err.Error())
 	}()
 	defer rg.Guard(&err)
+
+	log.Println("replikator", AppVersion)
 
 	flags := replikator.ParseFlags()
 
