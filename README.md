@@ -8,6 +8,17 @@ Kubernetes Resource Replicator
 replikator --conf CONFIG_DIR --kubeconfig path/to/kubeconfig
 ```
 
+## Container Image
+
+```
+yankeguo/replikator
+ghcr.io/yankeguo/replikator
+```
+
+**Mount the kubeconfig file to `/root/.kube/config`, or setup RBAC for in-cluster authentication**
+
+**Mount configuration files to `/replikator`**
+
 ## Configuration File
 
 ```yaml
@@ -21,6 +32,11 @@ source:
   name: tls-cluster-wildcard
 target:
   namespace: .+ # regex
+```
+
+## Example for Registry credentials replication
+
+```yaml
 ```
 
 ## Credits
