@@ -63,7 +63,7 @@ func runOnce(ctx context.Context, opts RunOptions) (err error) {
 	}
 
 	for _, namespace := range targetNamespaces {
-		log := log.WithField("namespace", namespace)
+		log := log.WithField("destination", namespace+"/"+opts.Task.Target.Name)
 
 		item := item.DeepCopy()
 

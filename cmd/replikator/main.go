@@ -36,10 +36,11 @@ func main() {
 	// setup logrus
 	if verbose, _ := strconv.ParseBool(os.Getenv("VERBOSE")); verbose {
 		log.SetLevel(log.DebugLevel)
+		log.SetFormatter(&log.TextFormatter{ForceColors: true})
 	} else {
 		log.SetLevel(log.InfoLevel)
+		log.SetFormatter(&log.TextFormatter{})
 	}
-	log.SetFormatter(&log.TextFormatter{})
 
 	log.WithField("version", AppVersion).Info("replikator starting")
 
