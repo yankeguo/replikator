@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.1.1 - 2024-09-20
+#### Documentation
+- update README.md [skip ci] - (ec80a0c) - GUO YANKE
+#### Miscellaneous Chores
+- **(deps)** using yaml.v3 - (6a6dc24) - GUO YANKE
+- using logrus for better logging - (908428c) - GUO YANKE
+
+- - -
+
 ## v0.1.0 - 2024-09-12
 #### Bug Fixes
 - fix in-cluster config resolving - (6ad3dc0) - GUO YANKE
