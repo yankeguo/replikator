@@ -43,7 +43,13 @@ func runOnce(ctx context.Context, opts RunOptions) (err error) {
 		}
 	}
 
-	log := log.WithField("resource", opts.Task.Resource).WithField("source", opts.Task.Source.Namespace+"/"+opts.Task.Source.Name)
+	log := log.WithField("res", opts.Task.Resource).
+		WithField(
+			"src", opts.Task.Source.Namespace+"/"+opts.Task.Source.Name,
+		).
+		WithField(
+			"dst", opts.Task.Target.Namespace.String()+"/"+opts.Task.Target.Name,
+		)
 
 	log.Info("task started")
 
@@ -63,7 +69,7 @@ func runOnce(ctx context.Context, opts RunOptions) (err error) {
 	}
 
 	for _, namespace := range targetNamespaces {
-		log := log.WithField("destination", namespace+"/"+opts.Task.Target.Name)
+		log := log.WithField("dst", namespace+"/"+opts.Task.Target.Name)
 
 		item := item.DeepCopy()
 
