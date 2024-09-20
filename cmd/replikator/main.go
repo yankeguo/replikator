@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/yankeguo/replikator"
 	"github.com/yankeguo/rg"
 	"k8s.io/client-go/dynamic"
@@ -24,17 +25,29 @@ func main() {
 	var err error
 	defer func() {
 		if err == nil {
-			return
+			log.Info("replikator exited")
+		} else {
+			log.WithError(err).Error("replikator exited")
+			os.Exit(1)
 		}
-		log.Fatalln("exited with error:", err.Error())
 	}()
 	defer rg.Guard(&err)
 
-	log.Println("replikator", AppVersion)
+	// setup logrus
+	if verbose, _ := strconv.ParseBool(os.Getenv("VERBOSE")); verbose {
+		log.SetLevel(log.DebugLevel)
+	} else {
+		log.SetLevel(log.InfoLevel)
+	}
+	log.SetFormatter(&log.TextFormatter{})
+
+	log.WithField("version", AppVersion).Info("replikator starting")
 
 	flags := rg.Must(replikator.ParseFlags())
 
 	tasks := rg.Must(replikator.LoadTasks(flags.Conf))
+
+	log.WithField("count", len(tasks)).Info("tasks loaded")
 
 	var conf *rest.Config
 
@@ -56,7 +69,7 @@ func main() {
 		chSig := make(chan os.Signal, 1)
 		signal.Notify(chSig, syscall.SIGTERM, syscall.SIGINT)
 		sig := <-chSig
-		log.Println("received signal:", sig.String())
+		log.WithField("signal", sig.String()).Warn("signal received")
 		ctxCancel()
 	}()
 

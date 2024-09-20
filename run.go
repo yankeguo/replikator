@@ -2,10 +2,10 @@ package replikator
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/yankeguo/rg"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -43,7 +43,9 @@ func runOnce(ctx context.Context, opts RunOptions) (err error) {
 		}
 	}
 
-	log.Printf("started %s(%s/%s)", opts.Task.Resource, opts.Task.Source.Namespace, opts.Task.Source.Name)
+	log := log.WithField("resource", opts.Task.Resource).WithField("source", opts.Task.Source.Namespace+"/"+opts.Task.Source.Name)
+
+	log.Info("task started")
 
 	res := rg.Must(schema.ParseGroupVersion(opts.Task.ResourceVersion)).WithResource(opts.Task.Resource)
 
@@ -61,6 +63,8 @@ func runOnce(ctx context.Context, opts RunOptions) (err error) {
 	}
 
 	for _, namespace := range targetNamespaces {
+		log := log.WithField("namespace", namespace)
+
 		item := item.DeepCopy()
 
 		if metadata, ok := item.Object["metadata"].(map[string]interface{}); ok {
@@ -68,14 +72,20 @@ func runOnce(ctx context.Context, opts RunOptions) (err error) {
 			metadata["name"] = opts.Task.Target.Name
 		}
 
-		rg.Must(opts.DynClient.Resource(res).Namespace(namespace).Apply(ctx, opts.Task.Target.Name, item, metaV1.ApplyOptions{
-			FieldManager: FieldManagerReplikator,
-		}))
+		log.Info("replicating")
 
-		log.Printf("replicated %s(%s/%s) to %s as %s", opts.Task.Resource, opts.Task.Source.Namespace, opts.Task.Source.Name, namespace, opts.Task.Target.Name)
+		if _, err = opts.DynClient.Resource(res).Namespace(namespace).Apply(ctx, opts.Task.Target.Name, item, metaV1.ApplyOptions{
+			Force:        true,
+			FieldManager: FieldManagerReplikator,
+		}); err != nil {
+			log.WithError(err).Error("replication failed")
+			err = nil
+		} else {
+			log.Info("replicated")
+		}
 	}
 
-	log.Printf("completed %s(%s/%s)", opts.Task.Resource, opts.Task.Source.Namespace, opts.Task.Source.Name)
+	log.Info("task finished")
 
 	return
 }

@@ -5,6 +5,8 @@
         "Clientset",
         "evanphx",
         "Kubeconfig",
-        "replikator"
+        "logrus",
+        "replikator",
+        "sirupsen"
     ]
 }

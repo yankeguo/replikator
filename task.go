@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -92,8 +91,6 @@ func LoadTasks(dir string) (tasks []Task, err error) {
 		if (!strings.HasSuffix(entry.Name(), ".yaml")) && (!strings.HasSuffix(entry.Name(), ".yml")) {
 			continue
 		}
-
-		log.Println("loading tasks from:", entry.Name())
 
 		buf := rg.Must(os.ReadFile(filepath.Join(dir, entry.Name())))
 
