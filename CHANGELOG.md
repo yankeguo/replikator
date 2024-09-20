@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.1.2 - 2024-09-20
+#### Miscellaneous Chores
+- update logging for task - (de63380) - GUO YANKE
+
+- - -
+
 ## v0.1.1 - 2024-09-20
 #### Documentation
 - update README.md [skip ci] - (ec80a0c) - GUO YANKE
