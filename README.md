@@ -25,7 +25,8 @@ ghcr.io/yankeguo/replikator
 # interval of execution, default to 1m
 interval: 1m
 
-# resource name, required, should be canonical plural, e.g. 'secrets', 'networking.k8s.io/v1/ingresses', 'apps/v1/deployments'
+# resource name, required, should be canonical plural
+# e.g. 'secrets', 'networking.k8s.io/v1/ingresses', 'apps/v1/deployments'
 resource: secrets
 
 # replication source
@@ -132,7 +133,6 @@ metadata:
 data:
   replikator.yaml: |
     interval: 1m
-    resource_version: v1
     resource: secrets
     source:
       namespace: default
