@@ -22,16 +22,29 @@ ghcr.io/yankeguo/replikator
 ## Configuration File
 
 ```yaml
-interval: 1m # default to '1m'
+# interval of execution, default to 1m
+interval: 1m
 
-resource_version: v1 # default to 'v1'
+# resource version, default to v1
+resource_version: v1
+# resource name, required, should be plural, e.g. secrets
 resource: secrets
 
+# source to replicate from
 source:
+  # source namespace, required
   namespace: kube-ingress
+  # name of the source, required
   name: tls-cluster-wildcard
+# target to replicate to
 target:
-  namespace: .+ # regex
+  # target namespace regexp, required
+  namespace: .+
+
+# multi-documents YAML are supported
+---
+
+# another task
 ```
 
 ## Example for Registry credentials replication
