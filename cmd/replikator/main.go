@@ -46,7 +46,9 @@ func main() {
 
 	flags := rg.Must(replikator.ParseFlags())
 
-	tasks := rg.Must(replikator.LoadTasks(flags.Conf))
+	defs := rg.Must(replikator.LoadTaskDefinitionsFromDir(flags.Conf))
+
+	tasks := rg.Must(replikator.BuildTasks(defs))
 
 	log.WithField("count", len(tasks)).Info("tasks loaded")
 
@@ -74,16 +76,16 @@ func main() {
 		ctxCancel()
 	}()
 
-	for _, task := range tasks {
+	for _, _task := range tasks {
+		task := _task
 		wg.Add(1)
-		go replikator.Run(
-			ctx, replikator.RunOptions{
-				WaitGroup: wg,
-				Task:      task,
-				Client:    client,
-				DynClient: dynClient,
-			},
-		)
+		go func() {
+			defer wg.Done()
+			task.Run(ctx, replikator.TaskOptions{
+				Client:        client,
+				DynamicClient: dynClient,
+			})
+		}()
 	}
 
 	wg.Wait()

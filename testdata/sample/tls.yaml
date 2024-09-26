@@ -1,6 +1,0 @@
-resource: secrets
-source:
-  namespace: kube-ingress
-  name: demo-replikator
-target:
-  namespace: .+

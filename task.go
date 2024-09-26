@@ -1,118 +1,118 @@
 package replikator
 
 import (
-	"bytes"
-	"errors"
-	"io"
-	"os"
-	"path/filepath"
+	"context"
 	"regexp"
-	"strings"
 	"time"
 
+	jsonpatch "github.com/evanphx/json-patch"
+	log "github.com/sirupsen/logrus"
 	"github.com/yankeguo/rg"
-	"gopkg.in/yaml.v3"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 )
 
+const FieldManagerReplikator = "io.github.yankeguo/replikator"
+
 type Task struct {
-	Interval    time.Duration `yaml:"-"`
-	RawInterval string        `yaml:"interval"`
+	interval time.Duration
 
-	ResourceVersion string `yaml:"resource_version"`
-	Resource        string `yaml:"resource"`
+	resource     schema.GroupVersionResource
+	srcNamespace string
+	srcName      string
+	dstNamespace *regexp.Regexp
+	dstName      string
 
-	Source struct {
-		Namespace string `yaml:"namespace"`
-		Name      string `yaml:"name"`
-	} `yaml:"source"`
-
-	Target struct {
-		Namespace    *regexp.Regexp `yaml:"-"`
-		RawNamespace string         `yaml:"namespace"`
-		Name         string         `yaml:"name"`
-	} `yaml:"target"`
+	javascript string
+	jsonpatch  jsonpatch.Patch
 }
 
-func sanitizeTask(task *Task) (err error) {
-	if task.RawInterval == "" {
-		task.RawInterval = "1m"
-	}
-
-	if task.Interval, err = time.ParseDuration(task.RawInterval); err != nil {
-		return
-	}
-
-	if task.ResourceVersion == "" {
-		task.ResourceVersion = "v1"
-	}
-
-	if task.Resource == "" {
-		err = errors.New("resource is required")
-		return
-	}
-
-	if task.Source.Namespace == "" {
-		buf, _ := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-		if len(buf) > 0 {
-			task.Source.Namespace = string(buf)
-		} else {
-			err = errors.New("source.namespace is required")
-			return
-		}
-	}
-
-	if task.Source.Name == "" {
-		err = errors.New("source.name is required")
-		return
-	}
-
-	if task.Target.RawNamespace == "" {
-		err = errors.New("target.namespace is required")
-		return
-	}
-
-	if task.Target.Namespace, err = regexp.Compile(task.Target.RawNamespace); err != nil {
-		return
-	}
-
-	if task.Target.Name == "" {
-		task.Target.Name = task.Source.Name
-	}
-	return
+type TaskOptions struct {
+	Client        *kubernetes.Clientset
+	DynamicClient *dynamic.DynamicClient
 }
 
-func LoadTasks(dir string) (tasks []Task, err error) {
+func (t *Task) Do(ctx context.Context, opts TaskOptions) (err error) {
 	defer rg.Guard(&err)
 
-	for _, entry := range rg.Must(os.ReadDir(dir)) {
-		if entry.IsDir() {
+	var targetNamespaces []string
+
+	for _, namespace := range rg.Must(opts.Client.CoreV1().Namespaces().List(ctx, metaV1.ListOptions{})).Items {
+		if namespace.Name == t.srcNamespace {
 			continue
 		}
-		if (!strings.HasSuffix(entry.Name(), ".yaml")) && (!strings.HasSuffix(entry.Name(), ".yml")) {
-			continue
-		}
-
-		buf := rg.Must(os.ReadFile(filepath.Join(dir, entry.Name())))
-
-		dec := yaml.NewDecoder(bytes.NewReader(buf))
-
-		for {
-			var task Task
-
-			if err = dec.Decode(&task); err != nil {
-				if errors.Is(err, io.EOF) {
-					err = nil
-					break
-				} else {
-					return
-				}
-			}
-
-			rg.Must0(sanitizeTask(&task))
-
-			tasks = append(tasks, task)
+		if t.dstNamespace.MatchString(namespace.Name) {
+			targetNamespaces = append(targetNamespaces, namespace.Name)
 		}
 	}
 
+	log := log.WithField("res", t.resource.String()).
+		WithField(
+			"src", t.srcNamespace+"/"+t.srcName,
+		).
+		WithField(
+			"dst", t.dstNamespace.String()+"/"+t.dstName,
+		)
+
+	log.Info("task started")
+
+	item := rg.Must(opts.DynamicClient.Resource(t.resource).Namespace(t.srcNamespace).Get(ctx, t.srcName, metaV1.GetOptions{}))
+
+	// sanitize item
+	delete(item.Object, "status")
+	if metadata, ok := item.Object["metadata"].(map[string]interface{}); ok {
+		item.Object["metadata"] = map[string]interface{}{
+			"name":        metadata["name"],
+			"namespace":   metadata["namespace"],
+			"labels":      metadata["labels"],
+			"annotations": metadata["annotations"],
+		}
+	}
+
+	for _, namespace := range targetNamespaces {
+		log := log.WithField("dst", namespace+"/"+t.dstName)
+
+		item := item.DeepCopy()
+
+		if metadata, ok := item.Object["metadata"].(map[string]interface{}); ok {
+			metadata["namespace"] = namespace
+			metadata["name"] = t.dstName
+		}
+
+		log.Info("replicating")
+
+		if _, err = opts.DynamicClient.Resource(t.resource).Namespace(namespace).Apply(ctx, t.dstName, item, metaV1.ApplyOptions{
+			Force:        true,
+			FieldManager: FieldManagerReplikator,
+		}); err != nil {
+			log.WithError(err).Error("replication failed")
+			err = nil
+		} else {
+			log.Info("replicated")
+		}
+	}
+
+	log.Info("task finished")
+
 	return
+}
+
+func (t *Task) Run(ctx context.Context, opts TaskOptions) {
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		if err := t.Do(ctx, opts); err != nil {
+			log.Println(err.Error())
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(t.interval):
+		}
+	}
 }

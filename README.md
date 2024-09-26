@@ -25,29 +25,43 @@ ghcr.io/yankeguo/replikator
 # interval of execution, default to 1m
 interval: 1m
 
-# resource version, default to v1
-resource_version: v1
-# resource name, required, should be plural, e.g. secrets
+# resource name, required, should be canonical plural, e.g. 'secrets', 'networking.k8s.io/v1/ingresses', 'apps/v1/deployments'
 resource: secrets
 
-# source to replicate from
+# replication source
 source:
   # source namespace, required
   namespace: kube-ingress
-  # name of the source, required
+  # source resource name, required
   name: tls-cluster-wildcard
-# target to replicate to
+
+# replication target
 target:
   # target namespace regexp, required
   namespace: .+
+  # target resource name, optional, default to source name
+  name: "tls-cluster-wildcard"
+
+# modification of the resource, optional
+modification:
+  # javascript code to modify the resource, optional, see below for details
+  javascript: |
+    resource.metadata.annotations["replikator/modified"] = new Date().toISOString()
+
+  # jsonpatch to modify the resource, optional
+  jsonpatch:
+    - op: remove
+      path: /metadata/annotations/replikator/modified
 
 # multi-documents YAML are supported
+# use --- to separate multiple tasks
 ---
-
 # another task
 ```
 
-## Example for Registry credentials replication
+## Examples
+
+### In-Cluster Registry Credentials Replication
 
 ```yaml
 apiVersion: v1

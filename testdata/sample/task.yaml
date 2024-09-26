@@ -1,0 +1,6 @@
+resource: secrets
+source:
+  namespace: weavintelli
+  name: update-wechat-menu-cfg
+target:
+  namespace: default

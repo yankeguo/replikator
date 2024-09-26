@@ -1,18 +1,22 @@
 interval: "2m"
-resource_version: v1
 resource: secrets
 source:
-  namespace: default
+  namespace: auto-ops
   name: mysecret1
 target:
   namespace: ".+"
   name: newsecret1
+modification:
+  javascript: "var a = 0;"
 ---
-resource_version: v1
-resource: secrets
+resource: apps/deployments
 source:
   namespace: default
   name: mysecret2
 target:
   namespace: ".+"
   name: newsecret2
+modification:
+  jsonpatch:
+    - op: remove
+      path: /status
