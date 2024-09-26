@@ -1,6 +1,10 @@
 # replikator
 
-Kubernetes Resource Replicator
+[![codecov](https://codecov.io/gh/yankeguo/replikator/graph/badge.svg?token=J7KQ5P4WPF)](https://codecov.io/gh/yankeguo/replikator)
+
+A kubernetes resource replicator.
+
+Suitable for replicating secrets among namespaces, or any other resources.
 
 ## Usage
 
