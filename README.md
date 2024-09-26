@@ -60,6 +60,35 @@ modification:
 # another task
 ```
 
+## Modification
+
+### JSONPatch
+
+A list of JSONPatch operations to modify the resource.
+
+A example to remove `spec.clusterIP` and `spec.clusterIPs` from a `Service` resource.
+
+```yaml
+modification:
+  jsonpatch:
+    - op: remove
+      path: /spec/clusterIP
+    - op: remove
+      path: /spec/clusterIPs
+```
+
+### JavaScript
+
+You can use JavaScript to modify the resource, just modify the `resource` object in place.
+
+A example to remove `spec.ports[*].nodePort` from a `Service` resource.
+
+```yaml
+modification:
+  javascript: |
+    resource.spec.ports.forEach(port => delete port.nodePort)
+```
+
 ## Examples
 
 ### In-Cluster Registry Credentials Replication

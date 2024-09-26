@@ -1,6 +1,16 @@
-resource: secrets
+resource: services
 source:
   namespace: weavintelli
-  name: update-wechat-menu-cfg
+  name: server
 target:
   namespace: default
+modification:
+  jsonpatch:
+    - op: remove
+      path: /spec/clusterIP
+    - op: remove
+      path: /spec/clusterIPs
+  javascript: |
+    resource.spec.ports.forEach(function(port) {
+      delete port.nodePort;
+    });
