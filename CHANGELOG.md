@@ -2,6 +2,24 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.2.0 - 2024-09-26
+#### Bug Fixes
+- update go version - (092fe9d) - GUO YANKE
+#### Documentation
+- update README.md [skip ci] - (26483ee) - GUO YANKE
+- update README.md [skip ci] - (a630ba2) - GUO YANKE
+- update README.md [skip ci] - (95fadb2) - GUO YANKE
+- update README.md [skip ci] - (d3c6617) - GUO YANKE
+#### Features
+- add modification support for jsonpatch and javascript - (50cdd7c) - GUO YANKE
+#### Refactoring
+- renaming functions - (dc5b8e9) - GUO YANKE
+- using TaskDefinition - (afbf10a) - GUO YANKE
+#### Tests
+- add codecov support - (0d44c2e) - GUO YANKE
+
+- - -
+
 ## v0.1.3 - 2024-09-20
 #### Miscellaneous Chores
 - update logging for task - (a30d080) - GUO YANKE
