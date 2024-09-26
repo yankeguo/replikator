@@ -44,14 +44,15 @@ target:
 
 # modification of the resource, optional
 modification:
-  # javascript code to modify the resource, optional, see below for details
-  javascript: |
-    resource.metadata.annotations["replikator/modified"] = new Date().toISOString()
-
   # jsonpatch to modify the resource, optional
   jsonpatch:
     - op: remove
       path: /metadata/annotations/replikator/modified
+
+  # javascript code to modify the resource, optional, see below for details
+  javascript: |
+    resource.metadata.annotations["replikator/modified"] = new Date().toISOString()
+
 
 # multi-documents YAML are supported
 # use --- to separate multiple tasks
