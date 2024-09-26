@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEvaluateJavascriptEvaluation(t *testing.T) {
+func TestEvaluateJavaScriptModification(t *testing.T) {
 	obj, err := json.Marshal(map[string]any{
 		"hello": "world",
 	})
 	require.NoError(t, err)
 
-	out, err := EvaluateJavascriptModification(string(obj), `
+	out, err := EvaluateJavaScriptModification(string(obj), `
 	resource.hello = resource.hello.toUpperCase();
 	`)
 	require.NoError(t, err)
@@ -26,13 +26,13 @@ func TestEvaluateJavascriptEvaluation(t *testing.T) {
 	}, res)
 }
 
-func TestEvaluateJavascriptEvaluationTimeout(t *testing.T) {
+func TestEvaluateJavaScriptModificationTimeout(t *testing.T) {
 	obj, err := json.Marshal(map[string]any{
 		"hello": "world",
 	})
 	require.NoError(t, err)
 
-	_, err = EvaluateJavascriptModification(string(obj), `
+	_, err = EvaluateJavaScriptModification(string(obj), `
 	resource.hello = resource.hello.toUpperCase();
 	while(true){}
 	`)

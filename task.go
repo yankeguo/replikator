@@ -53,7 +53,7 @@ func (t *Task) ListDestinationNamespaces(ctx context.Context, opts TaskOptions) 
 	return
 }
 
-func (t *Task) FetchSource(ctx context.Context, opts TaskOptions) (source *unstructured.Unstructured, err error) {
+func (t *Task) FetchResource(ctx context.Context, opts TaskOptions) (source *unstructured.Unstructured, err error) {
 	if source, err = opts.DynamicClient.Resource(t.resource).Namespace(t.srcNamespace).Get(ctx, t.srcName, metaV1.GetOptions{}); err != nil {
 		return
 	}
@@ -70,7 +70,7 @@ func (t *Task) FetchSource(ctx context.Context, opts TaskOptions) (source *unstr
 	return
 }
 
-func (t *Task) ReplicateSource(ctx context.Context, source *unstructured.Unstructured, namespace string, name string) (obj *unstructured.Unstructured, err error) {
+func (t *Task) CreateReplicatedResource(ctx context.Context, source *unstructured.Unstructured, namespace string, name string) (obj *unstructured.Unstructured, err error) {
 	obj = source.DeepCopy()
 
 	// update metadata
@@ -102,7 +102,7 @@ func (t *Task) ReplicateSource(ctx context.Context, source *unstructured.Unstruc
 		}
 
 		var out string
-		if out, err = EvaluateJavascriptModification(string(buf), t.javascript); err != nil {
+		if out, err = EvaluateJavaScriptModification(string(buf), t.javascript); err != nil {
 			return
 		}
 
@@ -129,12 +129,12 @@ func (t *Task) Do(ctx context.Context, opts TaskOptions) (err error) {
 
 	namespaces := rg.Must(t.ListDestinationNamespaces(ctx, opts))
 
-	source := rg.Must(t.FetchSource(ctx, opts))
+	src := rg.Must(t.FetchResource(ctx, opts))
 
 	for _, namespace := range namespaces {
 		log := log.WithField("dst", namespace+"/"+t.dstName)
 
-		obj := rg.Must(t.ReplicateSource(ctx, source, namespace, t.dstName))
+		obj := rg.Must(t.CreateReplicatedResource(ctx, src, namespace, t.dstName))
 
 		log.Info("replicating")
 

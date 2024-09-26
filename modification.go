@@ -13,7 +13,8 @@ var (
 	ErrScriptTimeout = errors.New("script timeout")
 )
 
-func EvaluateJavascriptModification(src string, script string) (out string, err error) {
+// EvaluateJavaScriptModification evaluates the javascript modification script on the src, input and output are both JSON string
+func EvaluateJavaScriptModification(src string, script string) (out string, err error) {
 	defer rg.Guard(&err)
 
 	vm := otto.New()
