@@ -2,18 +2,34 @@ package replikator
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/yankeguo/rg"
 	"gopkg.in/yaml.v3"
 )
+
+type TaskDefinitionList []TaskDefinition
+
+func (defs TaskDefinitionList) Build() (tasks TaskList, err error) {
+	for _, def := range defs {
+		var task *Task
+		if task, err = def.Build(); err != nil {
+			return
+		}
+		tasks = append(tasks, task)
+	}
+	return
+}
 
 // TaskDefinition is the definition of a Task
 type TaskDefinition struct {
@@ -96,8 +112,8 @@ func (def TaskDefinition) Build() (out *Task, err error) {
 	return
 }
 
-// LoadTaskDefinitionFromFile loads TaskDefinition from file
-func LoadTaskDefinitionFromFile(file string) (defs []TaskDefinition, err error) {
+// LoadTaskDefinitionsFromFile loads TaskDefinition from file
+func LoadTaskDefinitionsFromFile(file string) (defs TaskDefinitionList, err error) {
 	defer rg.Guard(&err)
 
 	buf := rg.Must(os.ReadFile(file))
@@ -123,7 +139,7 @@ func LoadTaskDefinitionFromFile(file string) (defs []TaskDefinition, err error) 
 }
 
 // LoadTaskDefinitionsFromDir loads TaskDefinitions from dir
-func LoadTaskDefinitionsFromDir(dir string) (defs []TaskDefinition, err error) {
+func LoadTaskDefinitionsFromDir(dir string) (defs TaskDefinitionList, err error) {
 	defer rg.Guard(&err)
 
 	for _, entry := range rg.Must(os.ReadDir(dir)) {
@@ -134,20 +150,37 @@ func LoadTaskDefinitionsFromDir(dir string) (defs []TaskDefinition, err error) {
 			continue
 		}
 
-		defs = append(defs, rg.Must(LoadTaskDefinitionFromFile(filepath.Join(dir, entry.Name())))...)
+		defs = append(defs, rg.Must(LoadTaskDefinitionsFromFile(filepath.Join(dir, entry.Name())))...)
 	}
 
 	return
 }
 
-// BuildTasks creates Tasks from TaskDefinitions
-func BuildTasks(defs []TaskDefinition) (tasks []*Task, err error) {
-	for _, def := range defs {
-		var task *Task
-		if task, err = def.Build(); err != nil {
-			return
+// DigestTaskDefinitionsFromDir creates digest for TaskDefinitions in dir, for change detection
+func DigestTaskDefinitionsFromDir(dir string) (digest string, err error) {
+	defer rg.Guard(&err)
+
+	var files []string
+
+	for _, entry := range rg.Must(os.ReadDir(dir)) {
+		if entry.IsDir() {
+			continue
 		}
-		tasks = append(tasks, task)
+		if !strings.HasSuffix(entry.Name(), ".yaml") && !strings.HasSuffix(entry.Name(), ".yml") {
+			continue
+		}
+		files = append(files, filepath.Join(dir, entry.Name()))
 	}
+
+	sort.Strings(files)
+
+	h := md5.New()
+
+	for _, file := range files {
+		rg.Must(h.Write(rg.Must(os.ReadFile(file))))
+	}
+
+	digest = hex.EncodeToString(h.Sum(nil))
+
 	return
 }

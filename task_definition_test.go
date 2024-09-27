@@ -49,7 +49,7 @@ func TestTaskDefBuild(t *testing.T) {
 	require.Equal(t, "\"/status\"", string(*tsk.jsonpatch[0]["path"]))
 }
 
-func TestLoadTaskDefinitionFromFile(t *testing.T) {
+func TestLoadTaskDefinitionsFromFile(t *testing.T) {
 	def1 := TaskDefinition{}
 	def1.Resource = "secrets"
 	def1.Source.Namespace = "auto-ops"
@@ -71,13 +71,27 @@ func TestLoadTaskDefinitionFromFile(t *testing.T) {
 		},
 	}
 
-	defs, err := LoadTaskDefinitionFromFile(filepath.Join("testdata", "task2.yaml"))
+	defs, err := LoadTaskDefinitionsFromFile(filepath.Join("testdata", "task2.yaml"))
 	require.NoError(t, err)
-	require.Equal(t, []TaskDefinition{def1, def2}, defs)
+	require.Equal(t, TaskDefinitionList{def1, def2}, defs)
+}
+
+func TestTaskDefinitionListBuild(t *testing.T) {
+	defs, err := LoadTaskDefinitionsFromFile(filepath.Join("testdata", "task2.yaml"))
+	require.NoError(t, err)
+
+	_, err = defs.Build()
+	require.NoError(t, err)
 }
 
 func TestLoadTaskDefinitionFromDir(t *testing.T) {
 	defs, err := LoadTaskDefinitionsFromDir("testdata")
 	require.NoError(t, err)
 	require.Len(t, defs, 3)
+}
+
+func TestDigestTaskDefinitionsFromDir(t *testing.T) {
+	digest, err := DigestTaskDefinitionsFromDir("testdata")
+	require.NoError(t, err)
+	require.Equal(t, "972f2f3da7a70102d2317725b7366a77", digest)
 }

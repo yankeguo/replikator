@@ -5,21 +5,78 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"sync"
 	"syscall"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/yankeguo/replikator"
 	"github.com/yankeguo/rg"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
 	AppVersion = "dev"
 )
+
+func createReloadChanel(mainCtx context.Context, dir string) chan struct{} {
+	reload := make(chan struct{}, 1)
+
+	digest, _ := replikator.DigestTaskDefinitionsFromDir(dir)
+
+	go func() {
+		defer close(reload)
+
+		for {
+			select {
+			case <-mainCtx.Done():
+				return
+			case <-time.After(time.Second * 10):
+			}
+
+			if newDigest, _ := replikator.DigestTaskDefinitionsFromDir(dir); newDigest != digest {
+				digest = newDigest
+				log.WithField("digest", digest).Info("task definitions changed")
+				select {
+				case <-mainCtx.Done():
+				case reload <- struct{}{}:
+				}
+			}
+		}
+	}()
+
+	return reload
+}
+
+func createReloadContextChannel(mainCtx context.Context, dir string) chan context.Context {
+	chCtx := make(chan context.Context, 1)
+
+	reload := createReloadChanel(mainCtx, dir)
+
+	go func() {
+		defer close(chCtx)
+
+		ctx, cancel := context.WithCancel(mainCtx)
+
+		chCtx <- ctx
+
+		for {
+			select {
+			case <-mainCtx.Done():
+				if cancel != nil {
+					cancel()
+				}
+				return
+			case <-reload:
+				if cancel != nil {
+					cancel()
+				}
+				ctx, cancel = context.WithCancel(mainCtx)
+				chCtx <- ctx
+			}
+		}
+	}()
+
+	return chCtx
+}
 
 func main() {
 	var err error
@@ -33,7 +90,6 @@ func main() {
 	}()
 	defer rg.Guard(&err)
 
-	// setup logrus
 	if verbose, _ := strconv.ParseBool(os.Getenv("VERBOSE")); verbose {
 		log.SetLevel(log.DebugLevel)
 		log.SetFormatter(&log.TextFormatter{ForceColors: true})
@@ -46,47 +102,36 @@ func main() {
 
 	flags := rg.Must(replikator.ParseFlags())
 
-	defs := rg.Must(replikator.LoadTaskDefinitionsFromDir(flags.Conf))
+	client, dynClient := rg.Must2(flags.CreateKubernetesClient())
 
-	tasks := rg.Must(replikator.BuildTasks(defs))
-
-	log.WithField("count", len(tasks)).Info("tasks loaded")
-
-	var conf *rest.Config
-
-	if flags.Kubeconfig.InCluster {
-		conf = rg.Must(rest.InClusterConfig())
-	} else {
-		conf = rg.Must(clientcmd.BuildConfigFromFlags("", flags.Kubeconfig.Path))
-	}
-
-	client := rg.Must(kubernetes.NewForConfig(conf))
-	dynClient := rg.Must(dynamic.NewForConfig(conf))
-
-	wg := &sync.WaitGroup{}
-
-	ctx := context.Background()
-	ctx, ctxCancel := context.WithCancel(ctx)
+	mainCtx, cancelMainCtx := context.WithCancel(context.Background())
+	defer cancelMainCtx()
 
 	go func() {
 		chSig := make(chan os.Signal, 1)
 		signal.Notify(chSig, syscall.SIGTERM, syscall.SIGINT)
 		sig := <-chSig
 		log.WithField("signal", sig.String()).Warn("signal received")
-		ctxCancel()
+		cancelMainCtx()
 	}()
 
-	for _, _task := range tasks {
-		task := _task
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			task.NewSession(replikator.TaskOptions{
-				Client:        client,
-				DynamicClient: dynClient,
-			}).Run(ctx)
-		}()
+	routine := func(ctx context.Context) (err error) {
+		defer rg.Guard(&err)
+		defs := rg.Must(replikator.LoadTaskDefinitionsFromDir(flags.Conf))
+		tasks := rg.Must(defs.Build())
+		log.WithField("count", len(tasks)).Info("tasks loaded")
+		tasks.NewSessions(replikator.TaskOptions{
+			Client:        client,
+			DynamicClient: dynClient,
+		}).Run(ctx)
+		return
 	}
 
-	wg.Wait()
+	chCtx := createReloadContextChannel(mainCtx, flags.Conf)
+
+	for ctx := range chCtx {
+		if err = routine(ctx); err != nil {
+			return
+		}
+	}
 }

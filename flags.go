@@ -5,6 +5,12 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+
+	"github.com/yankeguo/rg"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type Flags struct {
@@ -36,5 +42,21 @@ func ParseFlags() (flags Flags, err error) {
 		}
 	}
 
+	return
+}
+
+func (flags Flags) CreateKubernetesClient() (client *kubernetes.Clientset, dynClient *dynamic.DynamicClient, err error) {
+	defer rg.Guard(&err)
+
+	var conf *rest.Config
+
+	if flags.Kubeconfig.InCluster {
+		conf = rg.Must(rest.InClusterConfig())
+	} else {
+		conf = rg.Must(clientcmd.BuildConfigFromFlags("", flags.Kubeconfig.Path))
+	}
+
+	client = rg.Must(kubernetes.NewForConfig(conf))
+	dynClient = rg.Must(dynamic.NewForConfig(conf))
 	return
 }

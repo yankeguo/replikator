@@ -17,6 +17,21 @@ import (
 
 const FieldManagerReplikator = "io.github.yankeguo/replikator"
 
+type SessionList []*Session
+
+func (list SessionList) Run(ctx context.Context) {
+	wg := &sync.WaitGroup{}
+	for _, _session := range list {
+		session := _session
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			session.Run(ctx)
+		}()
+	}
+	wg.Wait()
+}
+
 type Session struct {
 	task      *Task
 	client    *kubernetes.Clientset

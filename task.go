@@ -12,6 +12,15 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+type TaskList []*Task
+
+func (list TaskList) NewSessions(opts TaskOptions) (out SessionList) {
+	for _, task := range list {
+		out = append(out, task.NewSession(opts))
+	}
+	return
+}
+
 type Task struct {
 	resource     schema.GroupVersionResource
 	srcNamespace string
