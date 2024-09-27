@@ -4,7 +4,7 @@
 
 A kubernetes resource replicator.
 
-Suitable for replicating secrets among namespaces, or any other resources.
+`replikator` watches a resource in a namespace, and replicates it to other namespaces.
 
 ## Usage
 
@@ -24,6 +24,8 @@ ghcr.io/yankeguo/replikator
 **Mount configuration files to `/replikator`**
 
 ## Configuration File
+
+`replikator` will watch the configuration directory for changes, and reload the configuration files.
 
 ```yaml
 # resource name, required, should be canonical plural
