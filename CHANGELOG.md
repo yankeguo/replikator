@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.3.0 - 2024-09-27
+#### Documentation
+- update README.md [skip ci] - (2294543) - GUO YANKE
+#### Features
+- reload and restart tasks on config directory changed - (9e4fd7c) - GUO YANKE
+- add resource version based de-duplication - (1f56cd1) - GUO YANKE
+- using watch instead of static interval - (57a77f3) - GUO YANKE
+#### Refactoring
+- change session id to global counter - (ec95fa6) - GUO YANKE
+
+- - -
+
 ## v0.2.0 - 2024-09-26
 #### Bug Fixes
 - update go version - (092fe9d) - GUO YANKE
