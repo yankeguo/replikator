@@ -81,10 +81,10 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			task.Run(ctx, replikator.TaskOptions{
+			task.NewSession(replikator.TaskOptions{
 				Client:        client,
 				DynamicClient: dynClient,
-			})
+			}).Run(ctx)
 		}()
 	}
 

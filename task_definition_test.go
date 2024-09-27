@@ -3,7 +3,6 @@ package replikator
 import (
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -11,17 +10,9 @@ import (
 
 func TestTaskDefBuild(t *testing.T) {
 	def := TaskDefinition{}
-	def.Interval = "2x"
-
-	_, err := def.Build()
-	require.Error(t, err)
-
-	def.Interval = ""
-	_, err = def.Build()
-	require.Error(t, err)
 
 	def.Resource = "apps/deployments"
-	_, err = def.Build()
+	_, err := def.Build()
 	require.Error(t, err)
 
 	def.Source.Namespace = "auto-ops"
@@ -32,7 +23,6 @@ func TestTaskDefBuild(t *testing.T) {
 	_, err = def.Build()
 	require.Error(t, err)
 
-	def.Interval = "2m"
 	def.Target.Namespace = ".+"
 	def.Target.Name = "custom-registry"
 	def.Modification.Javascript = "var a = 0;"
@@ -44,7 +34,6 @@ func TestTaskDefBuild(t *testing.T) {
 	}
 	tsk, err := def.Build()
 	require.NoError(t, err)
-	require.Equal(t, time.Minute*2, tsk.interval)
 	require.Equal(t, schema.GroupVersionResource{
 		Group:    "apps",
 		Version:  "v1",
@@ -62,7 +51,6 @@ func TestTaskDefBuild(t *testing.T) {
 
 func TestLoadTaskDefinitionFromFile(t *testing.T) {
 	def1 := TaskDefinition{}
-	def1.Interval = "2m"
 	def1.Resource = "secrets"
 	def1.Source.Namespace = "auto-ops"
 	def1.Source.Name = "mysecret1"

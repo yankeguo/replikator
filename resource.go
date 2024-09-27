@@ -1,6 +1,7 @@
 package replikator
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -29,5 +30,25 @@ func ParseGroupVersionResource(s string) (res schema.GroupVersionResource, err e
 	default:
 		err = errors.New("invalid resource: " + s)
 	}
+	return
+}
+
+// RetrieveMetadataName retrieve metadata.name from an object
+func RetrieveMetadataName(obj any) (name string, err error) {
+	var buf []byte
+	if buf, err = json.Marshal(obj); err != nil {
+		return
+	}
+	var m map[string]interface{}
+	if err = json.Unmarshal(buf, &m); err != nil {
+		return
+	}
+	if metadata, ok := m["metadata"].(map[string]interface{}); ok {
+		if n, ok := metadata["name"].(string); ok {
+			name = n
+			return
+		}
+	}
+	err = errors.New("metadata.name not found")
 	return
 }

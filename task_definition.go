@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/yankeguo/rg"
@@ -18,7 +17,6 @@ import (
 
 // TaskDefinition is the definition of a Task
 type TaskDefinition struct {
-	Interval string `yaml:"interval"`
 	Resource string `yaml:"resource"`
 	Source   struct {
 		Namespace string `yaml:"namespace"`
@@ -37,14 +35,6 @@ type TaskDefinition struct {
 // Build creates a Task from TaskDefinition
 func (def TaskDefinition) Build() (out *Task, err error) {
 	out = &Task{}
-
-	// interval
-	if def.Interval == "" {
-		def.Interval = "1m"
-	}
-	if out.interval, err = time.ParseDuration(def.Interval); err != nil {
-		return
-	}
 
 	// resource
 	if def.Resource == "" {
