@@ -51,7 +51,7 @@ modification:
   # jsonpatch to modify the resource, optional
   jsonpatch:
     - op: remove
-      path: /metadata/annotations/replikator/modified
+      path: /metadata/annotations/remove-this
 
   # javascript code to modify the resource, optional, see below for details
   javascript: |
@@ -111,10 +111,10 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "create", "update", "patch"]
+    verbs: ["get", "list", "create", "update", "patch", "watch"]
   - apiGroups: [""]
     resources: ["namespaces"]
-    verbs: ["list"]
+    verbs: ["list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
