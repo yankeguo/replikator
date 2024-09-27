@@ -22,6 +22,7 @@ type Session struct {
 	client    *kubernetes.Clientset
 	dynClient *dynamic.DynamicClient
 	log       *logrus.Entry
+	versions  map[string]string
 }
 
 func (s *Session) listDestinationNamespaces(ctx context.Context) (namespaces []string, err error) {
@@ -39,10 +40,12 @@ func (s *Session) listDestinationNamespaces(ctx context.Context) (namespaces []s
 	return
 }
 
-func (s *Session) fetchResource(ctx context.Context) (src *unstructured.Unstructured, err error) {
+func (s *Session) fetchResource(ctx context.Context) (src *unstructured.Unstructured, rv string, err error) {
 	defer rg.Guard(&err)
 
 	src = rg.Must(s.dynClient.Resource(s.task.resource).Namespace(s.task.srcNamespace).Get(ctx, s.task.srcName, metaV1.GetOptions{}))
+
+	rv = src.GetResourceVersion()
 
 	delete(src.Object, "status")
 	if metadata, ok := src.Object["metadata"].(map[string]interface{}); ok {
@@ -94,9 +97,13 @@ func (s *Session) Do(ctx context.Context, namespace string) (err error) {
 		namespaces = []string{namespace}
 	}
 
-	src := rg.Must(s.fetchResource(ctx))
+	src, rv := rg.Must2(s.fetchResource(ctx))
 
 	for _, namespace := range namespaces {
+		if s.versions[namespace] == rv {
+			continue
+		}
+
 		log := s.log.WithField("dst", namespace+"/"+s.task.dstName)
 
 		obj := rg.Must(s.createReplicatedResource(src, namespace))
@@ -109,6 +116,8 @@ func (s *Session) Do(ctx context.Context, namespace string) (err error) {
 		}); err != nil {
 			log.WithError(err).Error("replication failed")
 			err = nil
+		} else {
+			s.versions[namespace] = rv
 		}
 	}
 
@@ -225,6 +234,8 @@ func (s *Session) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case namespace = <-triggers:
+		case <-time.After(10 * time.Minute):
+			namespace = ""
 		}
 
 		if err := s.Do(ctx, namespace); err != nil {

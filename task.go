@@ -39,5 +39,6 @@ func (t *Task) NewSession(opts TaskOptions) *Session {
 			WithField("src", t.srcNamespace+"/"+t.srcName).
 			WithField("dst", t.dstNamespace.String()+"/"+t.dstName).
 			WithField("session", rg.Must(uuid.NewV7()).String()),
+		versions: map[string]string{},
 	}
 }
