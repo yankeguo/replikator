@@ -147,7 +147,9 @@ func (s *Session) Watch(ctx context.Context, triggers chan string) {
 		}
 
 		if err = s.watch(ctx, triggers); err != nil {
-			s.log.WithError(err).Error("watch error")
+			if ctx.Err() == nil {
+				s.log.WithError(err).Error("watch error")
+			}
 		}
 
 		time.Sleep(5 * time.Second)

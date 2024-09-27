@@ -3,7 +3,7 @@ source:
   namespace: weavintelli
   name: server
 target:
-  namespace: default
+  namespace: test.*
 modification:
   jsonpatch:
     - op: remove
@@ -11,6 +11,7 @@ modification:
     - op: remove
       path: /spec/clusterIPs
   javascript: |
+    resource.metadata.annotations['Hello'] = 'world'
     resource.spec.ports.forEach(function(port) {
       delete port.nodePort;
     });

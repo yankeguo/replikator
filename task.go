@@ -2,14 +2,18 @@ package replikator
 
 import (
 	"regexp"
+	"strconv"
+	"sync/atomic"
 
 	jsonpatch "github.com/evanphx/json-patch"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"github.com/yankeguo/rg"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+)
+
+var (
+	sessionCounter int64
 )
 
 type TaskList []*Task
@@ -40,6 +44,7 @@ type TaskOptions struct {
 
 // NewSession creates a new session for the task with kubernetes client and dynamic client
 func (t *Task) NewSession(opts TaskOptions) *Session {
+	session := strconv.FormatInt(atomic.AddInt64(&sessionCounter, 1), 10)
 	return &Session{
 		task:      t,
 		client:    opts.Client,
@@ -47,7 +52,7 @@ func (t *Task) NewSession(opts TaskOptions) *Session {
 		log: logrus.WithField("res", t.resource.String()).
 			WithField("src", t.srcNamespace+"/"+t.srcName).
 			WithField("dst", t.dstNamespace.String()+"/"+t.dstName).
-			WithField("session", rg.Must(uuid.NewV7()).String()),
+			WithField("session", session),
 		versions: map[string]string{},
 	}
 }
