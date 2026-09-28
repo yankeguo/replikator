@@ -14,6 +14,9 @@ func TestTaskNewSession(t *testing.T) {
 	tasks, err := defs.Build()
 	require.NoError(t, err)
 
-	session := tasks[0].NewSession(TaskOptions{})
-	require.NotNil(t, session)
+	first := tasks[0].NewSession(TaskOptions{})
+	second := tasks[0].NewSession(TaskOptions{})
+	require.NotNil(t, first)
+	require.NotEqual(t, first.log.Data["session"], second.log.Data["session"])
+	require.Contains(t, first.task.String(), "secrets auto-ops/mysecret1")
 }

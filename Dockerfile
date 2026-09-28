@@ -1,6 +1,6 @@
 ARG VERSION="dev"
 
-FROM golang:1.23 AS builder
+FROM golang:1.26 AS builder
 
 ARG VERSION
 
@@ -10,9 +10,9 @@ WORKDIR /go/src/app
 
 ADD . .
 
-RUN go build -ldflags="-X main.AppVersion=${VERSION}" -o /replikator ./cmd/replikator
+RUN go build -trimpath -ldflags="-s -w -X main.AppVersion=${VERSION}" -o /replikator ./cmd/replikator
 
-FROM alpine:3.20
+FROM alpine:3.22
 
 RUN apk add --no-cache ca-certificates tini
 

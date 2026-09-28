@@ -1,54 +1,81 @@
 package replikator
 
 import (
-	"encoding/json"
 	"errors"
+	"fmt"
+	"regexp"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// ParseGroupVersionResource parse a string to GroupVersionResource
-func ParseGroupVersionResource(s string) (res schema.GroupVersionResource, err error) {
-	splits := strings.Split(s, "/")
-	switch len(splits) {
+// versionPattern matches Kubernetes API versions such as v1 and v1beta1.
+var versionPattern = regexp.MustCompile(`^v[0-9]`)
+
+// ParseGroupVersionResource parses a canonical resource string.
+//
+// Accepted forms are "secrets", "apps/deployments", "v1beta1/ingresses",
+// and "networking.k8s.io/v1/ingresses". A missing version means v1.
+func ParseGroupVersionResource(s string) (schema.GroupVersionResource, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return schema.GroupVersionResource{}, errors.New("resource is required")
+	}
+
+	parts := strings.Split(s, "/")
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "" {
+			return schema.GroupVersionResource{}, fmt.Errorf("invalid resource %q", s)
+		}
+	}
+
+	var res schema.GroupVersionResource
+	switch len(parts) {
 	case 1:
 		res.Version = "v1"
-		res.Resource = splits[0]
+		res.Resource = parts[0]
 	case 2:
-		if strings.HasPrefix(splits[0], "v") {
-			res.Version = splits[0]
+		if versionPattern.MatchString(parts[0]) {
+			res.Version = parts[0]
 		} else {
-			res.Group = splits[0]
+			res.Group = parts[0]
 			res.Version = "v1"
 		}
-		res.Resource = splits[1]
+		res.Resource = parts[1]
 	case 3:
-		res.Group = splits[0]
-		res.Version = splits[1]
-		res.Resource = splits[2]
+		if !versionPattern.MatchString(parts[1]) {
+			return schema.GroupVersionResource{}, fmt.Errorf("invalid resource %q: version %q", s, parts[1])
+		}
+		res.Group = parts[0]
+		res.Version = parts[1]
+		res.Resource = parts[2]
 	default:
-		err = errors.New("invalid resource: " + s)
+		return schema.GroupVersionResource{}, fmt.Errorf("invalid resource %q", s)
 	}
-	return
+	return res, nil
 }
 
-// RetrieveMetadataName retrieve metadata.name from an object
-func RetrieveMetadataName(obj any) (name string, err error) {
-	var buf []byte
-	if buf, err = json.Marshal(obj); err != nil {
-		return
+// RetrieveMetadataName returns metadata.name from a Kubernetes object.
+func RetrieveMetadataName(obj any) (string, error) {
+	if obj == nil {
+		return "", errors.New("metadata.name not found")
 	}
-	var m map[string]interface{}
-	if err = json.Unmarshal(buf, &m); err != nil {
-		return
-	}
-	if metadata, ok := m["metadata"].(map[string]interface{}); ok {
-		if n, ok := metadata["name"].(string); ok {
-			name = n
-			return
+	if ro, ok := obj.(runtime.Object); ok {
+		accessor, err := meta.Accessor(ro)
+		if err == nil {
+			if name := accessor.GetName(); name != "" {
+				return name, nil
+			}
 		}
 	}
-	err = errors.New("metadata.name not found")
-	return
+	if m, ok := obj.(map[string]any); ok {
+		if metadata, ok := m["metadata"].(map[string]any); ok {
+			if name, ok := metadata["name"].(string); ok && name != "" {
+				return name, nil
+			}
+		}
+	}
+	return "", errors.New("metadata.name not found")
 }

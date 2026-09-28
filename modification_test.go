@@ -39,3 +39,11 @@ func TestEvaluateJavaScriptModificationTimeout(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, ErrScriptTimeout, err)
 }
+
+func TestEvaluateJavaScriptModificationRejectsInvalidScript(t *testing.T) {
+	_, err := EvaluateJavaScriptModification(`{"hello":"world"}`, `function(`)
+	require.Error(t, err)
+
+	_, err = EvaluateJavaScriptModification(`{"hello":"world"}`, `resource = undefined`)
+	require.Error(t, err)
+}
