@@ -11,7 +11,9 @@ modification:
     - op: remove
       path: /spec/clusterIPs
   javascript: |
+    resource.metadata.annotations = resource.metadata.annotations || {}
     resource.metadata.annotations['Hello'] = 'world'
-    resource.spec.ports.forEach(function(port) {
-      delete port.nodePort;
-    });
+    var ports = resource.spec.ports || []
+    ports.forEach(function (port) {
+      delete port.nodePort
+    })

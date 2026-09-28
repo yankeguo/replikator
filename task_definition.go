@@ -2,10 +2,11 @@ package replikator
 
 import (
 	"bytes"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,25 +14,48 @@ import (
 	"sort"
 	"strings"
 
-	jsonpatch "github.com/evanphx/json-patch"
-	"github.com/yankeguo/rg"
+	jsonpatch "github.com/evanphx/json-patch/v5"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-type TaskDefinitionList []TaskDefinition
+const serviceAccountNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 
-func (defs TaskDefinitionList) Build() (tasks TaskList, err error) {
-	for _, def := range defs {
-		var task *Task
-		if task, err = def.Build(); err != nil {
-			return
-		}
-		tasks = append(tasks, task)
+// readInClusterNamespace is replaced in tests.
+var readInClusterNamespace = func() (string, error) {
+	buf, err := os.ReadFile(serviceAccountNamespacePath)
+	if err != nil {
+		return "", err
 	}
-	return
+	return strings.TrimSpace(string(buf)), nil
 }
 
-// TaskDefinition is the definition of a Task
+// TaskDefinitionList is a set of task documents loaded from configuration files.
+type TaskDefinitionList []TaskDefinition
+
+// Build compiles every definition. Duplicate replication rules are rejected.
+func (defs TaskDefinitionList) Build() (TaskList, error) {
+	tasks := make(TaskList, 0, len(defs))
+	seen := make(map[string]struct{}, len(defs))
+	for _, def := range defs {
+		task, err := def.Build()
+		if err != nil {
+			return nil, err
+		}
+		id := task.String()
+		if _, ok := seen[id]; ok {
+			if def.origin != "" {
+				return nil, fmt.Errorf("%s: duplicate task %s", def.origin, id)
+			}
+			return nil, fmt.Errorf("duplicate task %s", id)
+		}
+		seen[id] = struct{}{}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
+}
+
+// TaskDefinition is one YAML document describing a replication rule.
 type TaskDefinition struct {
 	Resource string `yaml:"resource"`
 	Source   struct {
@@ -46,141 +70,218 @@ type TaskDefinition struct {
 		JSONPatch  []any  `yaml:"jsonpatch"`
 		Javascript string `yaml:"javascript"`
 	} `yaml:"modification"`
+
+	origin string
 }
 
-// Build creates a Task from TaskDefinition
-func (def TaskDefinition) Build() (out *Task, err error) {
-	out = &Task{}
+// Build compiles the definition into a Task.
+func (def TaskDefinition) Build() (*Task, error) {
+	task, err := def.build()
+	if err != nil && def.origin != "" {
+		return nil, fmt.Errorf("%s: %w", def.origin, err)
+	}
+	return task, err
+}
 
-	// resource
+func (def TaskDefinition) build() (*Task, error) {
+	out := &Task{}
+
+	def.Resource = strings.TrimSpace(def.Resource)
+	def.Source.Namespace = strings.TrimSpace(def.Source.Namespace)
+	def.Source.Name = strings.TrimSpace(def.Source.Name)
+	def.Target.Namespace = strings.TrimSpace(def.Target.Namespace)
+	def.Target.Name = strings.TrimSpace(def.Target.Name)
+
 	if def.Resource == "" {
-		err = errors.New("resource is required")
-		return
+		return nil, errors.New("resource is required")
 	}
-	if out.resource, err = ParseGroupVersionResource(def.Resource); err != nil {
-		return
+	resource, err := ParseGroupVersionResource(def.Resource)
+	if err != nil {
+		return nil, err
 	}
+	out.resource = resource
 
-	// srcNamespace
 	if def.Source.Namespace == "" {
-		buf, _ := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-		if len(buf) > 0 {
-			def.Source.Namespace = string(bytes.TrimSpace(buf))
-		} else {
-			err = errors.New("source.namespace is required")
-			return
+		ns, readErr := readInClusterNamespace()
+		ns = strings.TrimSpace(ns)
+		if readErr != nil || ns == "" {
+			return nil, errors.New("source.namespace is required")
 		}
+		def.Source.Namespace = ns
+	}
+	if err := validateDNS1123Label("source.namespace", def.Source.Namespace); err != nil {
+		return nil, err
 	}
 	out.srcNamespace = def.Source.Namespace
 
-	// srcName
 	if def.Source.Name == "" {
-		err = errors.New("source.name is required")
-		return
+		return nil, errors.New("source.name is required")
+	}
+	if err := validateDNS1123Subdomain("source.name", def.Source.Name); err != nil {
+		return nil, err
 	}
 	out.srcName = def.Source.Name
 
-	// dstNamespace
 	if def.Target.Namespace == "" {
-		err = errors.New("target.namespace is required")
-		return
+		return nil, errors.New("target.namespace is required")
 	}
-	if out.dstNamespace, err = regexp.Compile(def.Target.Namespace); err != nil {
-		return
+	pattern, err := regexp.Compile(def.Target.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("target.namespace: %w", err)
 	}
+	out.dstNamespace = pattern
 
-	// dstName
 	if def.Target.Name == "" {
 		def.Target.Name = def.Source.Name
 	}
+	if err := validateDNS1123Subdomain("target.name", def.Target.Name); err != nil {
+		return nil, err
+	}
 	out.dstName = def.Target.Name
 
-	// jsonpatch
 	if len(def.Modification.JSONPatch) > 0 {
-		var buf []byte
-		if buf, err = json.Marshal(def.Modification.JSONPatch); err != nil {
-			return
+		buf, err := json.Marshal(def.Modification.JSONPatch)
+		if err != nil {
+			return nil, fmt.Errorf("modification.jsonpatch: %w", err)
 		}
-		if out.jsonpatch, err = jsonpatch.DecodePatch(buf); err != nil {
-			return
+		patch, err := jsonpatch.DecodePatch(buf)
+		if err != nil {
+			return nil, fmt.Errorf("modification.jsonpatch: %w", err)
 		}
+		out.jsonpatch = patch
 	}
-
-	// javascript
 	out.javascript = strings.TrimSpace(def.Modification.Javascript)
-
-	return
+	return out, nil
 }
 
-// LoadTaskDefinitionsFromFile loads TaskDefinition from file
-func LoadTaskDefinitionsFromFile(file string) (defs TaskDefinitionList, err error) {
-	defer rg.Guard(&err)
+func validateDNS1123Label(field, value string) error {
+	if errs := validation.IsDNS1123Label(value); len(errs) > 0 {
+		return fmt.Errorf("%s %q: %s", field, value, errs[0])
+	}
+	return nil
+}
 
-	buf := rg.Must(os.ReadFile(file))
+func validateDNS1123Subdomain(field, value string) error {
+	if errs := validation.IsDNS1123Subdomain(value); len(errs) > 0 {
+		return fmt.Errorf("%s %q: %s", field, value, errs[0])
+	}
+	return nil
+}
+
+// LoadTaskDefinitionsFromFile loads every YAML document in file.
+// Empty documents are skipped. Later documents keep their 1-based index in error messages.
+func LoadTaskDefinitionsFromFile(file string) (TaskDefinitionList, error) {
+	buf, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", file, err)
+	}
 
 	dec := yaml.NewDecoder(bytes.NewReader(buf))
-
-	for {
-		var def TaskDefinition
-
-		if err = dec.Decode(&def); err != nil {
-			if errors.Is(err, io.EOF) {
-				err = nil
-				break
-			} else {
-				return
-			}
+	var defs TaskDefinitionList
+	for i := 1; ; i++ {
+		var node yaml.Node
+		err := dec.Decode(&node)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("decode %s document %d: %w", file, i, err)
+		}
+		if isEmptyYAMLDocument(&node) {
+			continue
 		}
 
+		var def TaskDefinition
+		if err := node.Decode(&def); err != nil {
+			return nil, fmt.Errorf("decode %s document %d: %w", file, i, err)
+		}
+		def.origin = fmt.Sprintf("%s document %d", file, i)
 		defs = append(defs, def)
 	}
-
-	return
+	return defs, nil
 }
 
-// LoadTaskDefinitionsFromDir loads TaskDefinitions from dir
-func LoadTaskDefinitionsFromDir(dir string) (defs TaskDefinitionList, err error) {
-	defer rg.Guard(&err)
-
-	for _, entry := range rg.Must(os.ReadDir(dir)) {
-		if entry.IsDir() {
-			continue
+func isEmptyYAMLDocument(node *yaml.Node) bool {
+	n := node
+	if n.Kind == yaml.DocumentNode {
+		if len(n.Content) == 0 {
+			return true
 		}
-		if (!strings.HasSuffix(entry.Name(), ".yaml")) && (!strings.HasSuffix(entry.Name(), ".yml")) {
-			continue
+		if len(n.Content) == 1 {
+			n = n.Content[0]
 		}
-
-		defs = append(defs, rg.Must(LoadTaskDefinitionsFromFile(filepath.Join(dir, entry.Name())))...)
 	}
-
-	return
+	return n.Tag == "!!null" || n.Kind == 0
 }
 
-// DigestTaskDefinitionsFromDir creates digest for TaskDefinitions in dir, for change detection
-func DigestTaskDefinitionsFromDir(dir string) (digest string, err error) {
-	defer rg.Guard(&err)
-
-	var files []string
-
-	for _, entry := range rg.Must(os.ReadDir(dir)) {
-		if entry.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(entry.Name(), ".yaml") && !strings.HasSuffix(entry.Name(), ".yml") {
-			continue
-		}
-		files = append(files, filepath.Join(dir, entry.Name()))
+// LoadTaskDefinitionsFromDir loads YAML files from dir in lexical order.
+// Subdirectories are ignored.
+func LoadTaskDefinitionsFromDir(dir string) (TaskDefinitionList, error) {
+	files, err := listTaskDefinitionFiles(dir)
+	if err != nil {
+		return nil, err
 	}
-
-	sort.Strings(files)
-
-	h := md5.New()
-
+	var defs TaskDefinitionList
 	for _, file := range files {
-		rg.Must(h.Write(rg.Must(os.ReadFile(file))))
+		fileDefs, err := LoadTaskDefinitionsFromFile(file)
+		if err != nil {
+			return nil, err
+		}
+		defs = append(defs, fileDefs...)
+	}
+	return defs, nil
+}
+
+// LoadTasks loads and compiles every task definition in dir.
+func LoadTasks(dir string) (TaskList, error) {
+	defs, err := LoadTaskDefinitionsFromDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	return defs.Build()
+}
+
+// DigestTaskDefinitionsFromDir returns a content digest of the YAML files in dir.
+// The digest changes when a file name, length, or body changes.
+func DigestTaskDefinitionsFromDir(dir string) (string, error) {
+	files, err := listTaskDefinitionFiles(dir)
+	if err != nil {
+		return "", err
 	}
 
-	digest = hex.EncodeToString(h.Sum(nil))
+	hash := sha256.New()
+	for _, file := range files {
+		buf, err := os.ReadFile(file)
+		if err != nil {
+			return "", fmt.Errorf("read %s: %w", file, err)
+		}
+		rel, err := filepath.Rel(dir, file)
+		if err != nil {
+			rel = file
+		}
+		fmt.Fprintf(hash, "%s\n%d\n", filepath.ToSlash(rel), len(buf))
+		hash.Write(buf)
+		hash.Write([]byte{'\n'})
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
 
-	return
+func listTaskDefinitionFiles(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read config dir %s: %w", dir, err)
+	}
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+		files = append(files, filepath.Join(dir, name))
+	}
+	sort.Strings(files)
+	return files, nil
 }

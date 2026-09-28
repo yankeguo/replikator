@@ -25,16 +25,26 @@ ghcr.io/yankeguo/replikator
 
 ## Configuration File
 
-`replikator` will watch the configuration directory for changes, and reload the configuration files.
+`replikator` polls the configuration directory every 10 seconds and reloads it when a file changes. Polling is used because a mounted ConfigMap does not reliably emit filesystem events. If the new files fail to parse, the tasks already running are left in place.
+
+## Behavior
+
+- The source namespace is never a replication target, even when `target.namespace` matches it. Namespaces that are terminating are skipped.
+- Replicas are written with server-side apply and forced to match the transformed source. The field manager is `io.github.yankeguo/replikator`.
+- Each replica is annotated with `replikator.yankeguo.github.io/managed`, `source-namespace`, and `source-name`. When the source object is deleted, only replicas carrying those annotations are deleted.
+- An unchanged source is not written again. A full resync runs every 10 minutes, and again whenever a watch reconnects, so a deleted replica is created again.
+- Inside a cluster, `source.namespace` may be omitted. It then defaults to the pod namespace.
+
+Modifications run before volatile metadata is removed, so a JSON patch can still target fields such as `/status` or `/spec/clusterIP`. `metadata.resourceVersion`, `uid`, `managedFields`, `ownerReferences`, and `status` are not copied.
 
 ```yaml
-# resource name, required, should be canonical plural
+# resource name, required, canonical plural
 # e.g. 'secrets', 'networking.k8s.io/v1/ingresses', 'apps/v1/deployments'
 resource: secrets
 
 # replication source
 source:
-  # source namespace, required
+  # source namespace; optional in-cluster, where it defaults to the pod namespace
   namespace: kube-ingress
   # source resource name, required
   name: tls-cluster-wildcard
@@ -55,6 +65,7 @@ modification:
 
   # javascript code to modify the resource, optional, see below for details
   javascript: |
+    resource.metadata.annotations = resource.metadata.annotations || {}
     resource.metadata.annotations["replikator/modified"] = new Date().toISOString()
 
 
@@ -90,7 +101,10 @@ A example to remove `spec.ports[*].nodePort` from a `Service` resource.
 ```yaml
 modification:
   javascript: |
-    resource.spec.ports.forEach(port => delete port.nodePort)
+    var ports = resource.spec.ports || []
+    ports.forEach(function (port) {
+      delete port.nodePort
+    })
 ```
 
 ## Examples
